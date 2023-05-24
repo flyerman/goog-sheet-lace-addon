@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+  </head>
+
+  <body>
+
+    <script type="module">
+    import { Blockfrost, Lucid } from "https://unpkg.com/lucid-cardano@0.9.8/web/mod.js";
+ 
+    async function onLaceConnect(api) {
+      //const api = window.parent.cardano.lace;
+      console.log("api:");
+      console.log(api);
+      //api.isEnabled().then( (value) => {console.log("isenabled: " + value);} );
+
+      const networkId = await api.getNetworkId()
+      const networkName = (networkId === 1 ? "Mainnet" : "Preprod")
+      console.log(networkName);
+
+      const lucid = await Lucid.new(
+        networkId === 1 ? new Blockfrost("https://cardano-mainnet.blockfrost.io/api/v0/", "mainnetnDFaNXdFtLydyvRlyz0lP0kagEXlDChT") : new Blockfrost("https://cardano-preprod.blockfrost.io/api/v0", "preprodtmmwJE6tXl5MDYRJ1HiZwVuxfXlJgvbI"),
+        networkName
+      )
+    
+
+      //  const lucid = await Lucid.new()
+
+      lucid.selectWallet(api);
+      window.lucid = lucid;
+      document.getElementById("connection").innerHTML = "Connected to Lace on " + networkName + "!";
+    }
+
+    console.log(window.parent.cardano.lace);
+    
+    window.parent.cardano.lace.enable().then( (api) => {onLaceConnect(api);} );
+
+    </script>
+
+    <script>
+      // function sendAda(rowIdx, amount, receipient_addr) {
+      //     console.log("calling sendADA");
+      //     window.txIdx++;
+      //     lovelaceAmount = BigInt(amount * 1000000);
+      //     const tx = 
+      //         window.lucid.newTx().payToAddress(receipient_addr, 
+      //                                           { lovelace: lovelaceAmount })
+      //                             .complete()
+      //                             .then( (tx) => {
+
+      //         console.log("payToAddress completed");
+      //         const signedTx = tx.sign().complete().then( (signedTx) => {
+
+      //         const txHash = signedTx.submit().then( (txHash) => {
+
+      //           google.script.run.withSuccessHandler(() => {
+      //               console.log(txHash);
+      //               inner = document.getElementById("cellvalue").innerHTML;
+      //               inner += "<p>Sent " + amount + " to " + receipient_addr + "(" + txHash + ")";
+      //               document.getElementById("cellvalue").innerHTML = inner;
+
+      //               if (window.txIdx < window.txBatch.length) {
+      //                 sendAda(window.txIdx + 1, window.txBatch[window.txIdx][0], window.txBatch[window.txIdx][1]);
+      //               }
+
+      //             }).setTransactionID(rowIdx, txHash);
+      //         })
+      //       })
+      //     });
+      // }
+
+
+
+      async function buildTx(payToAddresses) {
+        console.log("calling buildTx");
+
+        const txBuilder = window.lucid.newTx();
+        const { CML, assetsToValue } = window;
+
+        payToAddresses.forEach(([adaAmount, address]) => {
+          const lovelace = adaAmount * 1000000;
+          
+          console.log({ adaAmount, address });         
+          txBuilder.payToAddress(address, { lovelace });
+        });
+
+        console.log("calling tx builder complete");
+        const unsignedTx = await txBuilder.complete();
+
+        console.log("calling tx sign", await unsignedTx.toString());
+        const signedTx = await unsignedTx.sign().complete();
+
+        console.log("calling tx submit");
+        const txHash = await signedTx.submit();
+
+        return txHash;
+      }
+
+      async function onGetCellValue(value) {
+
+        console.log("calling onGetCellValue")
+        console.log(value)
+        document.getElementById("cellvalue").innerHTML = ""
+        document.getElementById("script_error").innerHTML = ""
+        document.getElementById("lace_error").innerHTML = ""
+
+        try {
+          const txHash = await buildTx(value)
+
+          console.log('txHash', txHash)
+
+          google.script.run
+            .withFailureHandler( (error) => {
+              document.getElementById("script_error").innerHTML = error
+            })
+            .withSuccessHandler( () => { 
+              let { innerHTML } = document.getElementById("cellvalue")
+              value.map(([amount, address]) => {innerHTML += "<p>Sent " + amount + " to " + address})
+              innerHTML += "<p>TxHash: " + txHash
+              document.getElementById("cellvalue").innerHTML = innerHTML
+            })
+            .setTxCol(txHash)
+
+        } catch(error) {
+          document.getElementById("script_error").innerHTML = error
+        }
+      }
+
+      function getCellValue() {
+        console.log("calling getCellValue")
+        google.script.run
+          .withSuccessHandler(onGetCellValue)
+          .getCurrentCell()          
+      }
+    
+    </script>
+
+    <div id="connection">connecting to lace...</div>
+    <p>
+    <input type="button" value="Send ADA" onclick="getCellValue();">
+    <p>
+    <div id="cellvalue">Waiting for user input.</div>
+    <p>
+    <div id="script_error" style="color: red;"></div>
+    <div id="lace_error" style="color: red;"></div>
+  </body>
+</html>
